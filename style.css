@@ -1,8 +1,8 @@
 :root{
-  --bg-top:#0f2e0f; --bg-btm:#071a07; /* 緑の空 */
+  --bg-top:#0f2e0f; --bg-btm:#071a07;   /* 背景(空) */
   --fg:#e6f5e6; --accent:#6aff6a;
-  --ground:#164d16; --ground-top:#1f6d1f; /* 地面の明るいライン */
-  --hud:rgba(0,0,0,.50);
+  --ground:#164d16; --ground-top:#1f6d1f; /* 地面の明るい縁 */
+  --hud:rgba(0,0,0,.5);
 }
 
 *{ box-sizing:border-box; }
@@ -13,14 +13,15 @@ html,body{
   color:var(--fg);
   font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;
 }
+
 #game{
   width:100vw;
-  height:100dvh;             /* スマホにぴったり */
+  height:100dvh;               /* スマホにぴったり */
   display:block;
-  touch-action:manipulation; /* タップ＝ジャンプ */
+  touch-action:manipulation;   /* タップ＝ジャンプ */
   outline:none;
-  padding-top:env(safe-area-inset-top);    /* iOS安全域（上） */
-  padding-left:env(safe-area-inset-left);  /* ノッチ等 */
+  padding-top:env(safe-area-inset-top);
   padding-right:env(safe-area-inset-right);
   padding-bottom:env(safe-area-inset-bottom);
+  padding-left:env(safe-area-inset-left);
 }
