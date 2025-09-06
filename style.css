@@ -1,0 +1,19 @@
+:root{
+  --bg:#0d0f13; --fg:#e7ecf3; --accent:#8dd3ff;
+}
+*{ box-sizing:border-box; }
+html,body{
+  height:100%;
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;
+}
+/* 端末にぴったり。アドレスバーを考慮して 100dvh を使用 */
+#game{
+  width:100vw;
+  height:100dvh;
+  display:block;
+  touch-action:manipulation;
+  outline:none;
+}
