@@ -1,11 +1,9 @@
 :root{
-  /* 緑調テーマ */
   --bg: #0b1d0b;
   --fg: #e6f5e6;
   --accent: #6aff6a;
   --ground: #164d16;
   --hud-bg: rgba(0,0,0,.42);
-  --wall: #1f5d1f;
 }
 *{ box-sizing:border-box; }
 html,body{
@@ -17,7 +15,7 @@ html,body{
 }
 #game{
   width:100vw;
-  height:100dvh;      /* スマホの表示領域にぴったり */
+  height:100dvh;
   display:block;
   touch-action:manipulation;
   outline:none;
