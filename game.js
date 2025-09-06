@@ -42,10 +42,8 @@
   let state = 'loading'; // home / playing / gameover
   let last = 0, perf = 0;
   let speed = 6, score = 0;
-  let wallX = 0, wallSpeed = 5; // 後ろ壁
 
-  // 物理
-  function GY() { return window.innerHeight - 90; } // ground line
+  function GY() { return window.innerHeight - 90; }
   const GRAVITY = () => Math.max(0.6, window.innerHeight * 0.00015);
 
   // ===== Helpers =====
@@ -62,7 +60,7 @@
     ctx.drawImage(img, x, y, w, h);
   }
 
-  // ===== Player (Penguin) =====
+  // ===== Player =====
   const player = {
     w: 110, h: 85,
     x: 0, y: 0, vy: 0,
@@ -83,8 +81,6 @@
     update() {
       this.vy += GRAVITY();
       this.y += this.vy;
-
-      // 基本は地面で止まる（穴のときは後で上書き）
       if (this.y + this.h >= GY()) {
         this.y = GY() - this.h;
         this.vy = 0; this.onGround = true;
@@ -94,7 +90,6 @@
       const img = images.penguinRun;
       const bob = Math.sin(perf * 0.25) * 3;
       if (img) {
-        // 右向きに反転表示（写真を中央寄せで綺麗に）
         ctx.save();
         ctx.scale(-1, 1);
         ctx.drawImage(img, -this.x - this.w, this.y + bob, this.w, this.h);
@@ -103,17 +98,10 @@
         ctx.fillStyle = '#6aff6a';
         ctx.fillRect(this.x, this.y, this.w, this.h);
       }
-      // 土煙（雰囲気）
-      if (this.onGround && (perf % 8) < 4) {
-        ctx.fillStyle = 'rgba(200,255,200,.5)';
-        ctx.beginPath();
-        ctx.arc(this.x + this.w / 2, this.y + this.h, 6 + Math.random() * 4, 0, Math.PI * 2);
-        ctx.fill();
-      }
     }
   };
 
-  // ===== Obstacles (足場・ブロック。ぶつかっても死なない) =====
+  // ===== Obstacles =====
   const obstacles = [];
   function spawnObstacle() {
     const w = 50 + Math.random() * 70;
@@ -129,12 +117,10 @@
     for (const o of obstacles) {
       ctx.fillStyle = '#228b22';
       ctx.fillRect(o.x, o.y, o.w, o.h);
-      ctx.fillStyle = 'rgba(255,255,255,.08)';
-      ctx.fillRect(o.x + 4, o.y + 4, o.w - 8, o.h - 8);
     }
   }
 
-  // ===== Holes (落とし穴) =====
+  // ===== Holes =====
   const holes = [];
   function spawnHole() {
     const w = 110 + Math.random() * 140;
@@ -151,21 +137,6 @@
   }
   function isOverHole(pxCenter) {
     return holes.some(h => pxCenter > h.x && pxCenter < h.x + h.w);
-  }
-
-  // ===== Back Wall (後ろの壁) =====
-  function resetWall() {
-    wallX = Math.max(0, player.x - 140);   // プレイヤーより左に配置
-    wallSpeed = 4.8;                        // 初速（ゲーム進行で上がる）
-  }
-  function updateWall() {
-    // 距離に応じて徐々に加速（上限あり）
-    wallSpeed = Math.min(12, wallSpeed + 0.0006);
-    wallX += wallSpeed;
-  }
-  function drawWall() {
-    ctx.fillStyle = 'var(--wall)';
-    ctx.fillRect(0, 0, wallX, window.innerHeight);
   }
 
   // ===== Input =====
@@ -187,7 +158,6 @@
     g.addColorStop(1, '#061906');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
-    // 地面
     ctx.fillStyle = '#164d16';
     ctx.fillRect(0, GY(), window.innerWidth, window.innerHeight - GY());
   }
@@ -199,27 +169,25 @@
     ctx.fillText(`SCORE ${score | 0}`, 16, 32);
     ctx.fillText(`SPEED ${speed.toFixed(1)}`, 16, 56);
   }
-
   function drawTitle() {
-    centerDraw(images.homeImage, 520); // 写真を中央に大きく
+    centerDraw(images.homeImage, 520);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#6aff6a';
-    ctx.font = '700 48px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.font = '700 48px sans-serif';
     ctx.fillText('わいちゃんRUN', window.innerWidth / 2, 70);
     ctx.fillStyle = '#fff';
-    ctx.font = '28px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.font = '28px sans-serif';
     ctx.fillText('START', window.innerWidth / 2, window.innerHeight - 120);
   }
-
   function drawGameOver() {
     ctx.fillStyle = 'rgba(0,0,0,.6)';
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
     centerDraw(images.gotHit, 520);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
-    ctx.font = '700 56px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.font = '700 56px sans-serif';
     ctx.fillText('GAME OVER', window.innerWidth / 2, 80);
-    ctx.font = '24px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.font = '24px sans-serif';
     ctx.fillText(`SCORE ${score | 0}`, window.innerWidth / 2, window.innerHeight - 84);
     ctx.fillText('タップでホームへ', window.innerWidth / 2, window.innerHeight - 44);
   }
@@ -228,19 +196,15 @@
   function toHome() {
     state = 'home';
     try { overSE.pause(); overSE.currentTime = 0; } catch {}
-    // モバイルの自動再生保護対策：ユーザーの次のタップで再生できるようにする
-    homeBGM.play().catch(()=>{ /* 初回は失敗してもOK。次の操作で再試行 */ });
+    homeBGM.play().catch(()=>{});
   }
   function startGame() {
     state = 'playing';
-    // サウンド切替
     try { homeBGM.pause(); } catch {}
     try { overSE.pause(); overSE.currentTime = 0; } catch {}
-
     perf = 0; score = 0; speed = 6;
     player.reset();
     obstacles.length = 0; holes.length = 0;
-    resetWall();
   }
   function gameOver() {
     state = 'gameover';
@@ -253,21 +217,15 @@
 
     if (state === 'home') {
       drawTitle();
-      drawWall(); // 薄く背景として
     }
     else if (state === 'playing') {
-      // 進行
-      speed = Math.min(16, speed + 0.0010); // 少しずつ加速
+      speed = Math.min(16, speed + 0.0010);
       score += speed * 0.4;
-
       updateObstacles();
       updateHoles();
-      updateWall();
-
-      // プレイヤー更新（基礎）
       player.update();
 
-      // 足場・障害物：上からなら乗れる／横からは軽く押し戻す
+      // 足場判定
       let standingOnTop = false;
       for (const o of obstacles) {
         if (hit(player, o)) {
@@ -275,45 +233,25 @@
           if (fromAbove) {
             player.y = o.y - player.h;
             player.vy = 0; player.onGround = true; standingOnTop = true;
-          } else {
-            // 横ヒット：少し右に寄せる（死なない）
-            if (player.x + player.w/2 < o.x + o.w/2) {
-              player.x = o.x - player.w - 1;
-            } else {
-              player.x = o.x + o.w + 1;
-            }
           }
         }
       }
 
-      // 穴の上にいるか（地面が消える）
+      // 穴判定
       const cx = player.x + player.w/2;
       const overHole = isOverHole(cx);
-      if (!standingOnTop) {
-        if (overHole) {
-          // 落下継続、画面下でゲームオーバー
-          if (player.y + player.h >= window.innerHeight) gameOver();
-          else player.onGround = false;
-        } else {
-          // 通常地面に吸着（保険）
-          if (player.y + player.h > GY()) {
-            player.y = GY() - player.h; player.vy = 0; player.onGround = true;
-          }
-        }
+      if (!standingOnTop && overHole) {
+        if (player.y + player.h >= window.innerHeight) gameOver();
+        else player.onGround = false;
       }
 
-      // 後ろ壁に押し潰されたらゲームオーバー
-      if (wallX >= player.x) gameOver();
-
-      // 描画
       drawHoles();
       drawObstacles();
       player.draw();
-      drawWall();
       drawHUD();
     }
     else if (state === 'gameover') {
-      drawHoles(); drawObstacles(); player.draw(); drawWall(); drawGameOver();
+      drawHoles(); drawObstacles(); player.draw(); drawGameOver();
     }
 
     requestAnimationFrame(tick);
