@@ -1,5 +1,10 @@
 :root{
-  --bg:#0d0f13; --fg:#e7ecf3; --accent:#8dd3ff;
+  /* 緑調テーマ */
+  --bg: #0b1d0b;
+  --fg: #e6f5e6;
+  --accent: #6aff6a;
+  --ground: #164d16;
+  --hud-bg: rgba(0,0,0,.4);
 }
 *{ box-sizing:border-box; }
 html,body{
@@ -9,7 +14,6 @@ html,body{
   color:var(--fg);
   font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;
 }
-/* 端末にぴったり。アドレスバーを考慮して 100dvh を使用 */
 #game{
   width:100vw;
   height:100dvh;
