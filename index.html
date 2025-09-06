@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>わいちゃんRUN</title>
+<style>
+  :root{ --bg:#0d0f13; --fg:#e7ecf3; --accent:#8dd3ff; --tile:#151a26; }
+  html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans JP", sans-serif; }
+  .wrap{ position:fixed; inset:0; display:grid; place-items:center; }
+  canvas{ width:100vw; height:100dvh; display:block; touch-action:manipulation; outline:none; }
+  /* Simple on-canvas CTA mirrors here for accessibility */
+  .sr-only{ position:absolute; left:-9999px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="game" width="800" height="450" aria-label="わいちゃんRUN ゲームキャンバス" tabindex="0"></canvas>
+  <button class="sr-only" id="startBtn">スタート</button>
+</div>
+<script>
+(function(){
+  'use strict';
+
+  // ====== Asset paths (置き換えOK) ======
+  // ※ファイル名の大文字小文字に注意（例: ".PNG"）。
+  const ASSETS = {
+    penguinRun:  './走り.PNG',       // 走り
+    bear:        './追いかける.PNG', // 追いかける（敵）
+    gotHit:      './襲われた.PNG',   // やられた
+    homeImage:   './ホーム画面.PNG'  // ホーム画面
+  };
+
+  // ====== Canvas & Resize ======
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  const VW = 800, VH = 450; // 仮想解像度（16:9）
+
+  function clear(){ ctx.clearRect(0,0,canvas.width,canvas.height); }
+
+  function drawBG(){
+    // 空グラデーション
+    const g = ctx.createLinearGradient(0,0,0,VH);
+    g.addColorStop(0,'#172033');
+    g.addColorStop(1,'#0c121e');
+    ctx.fillStyle = g; ctx.fillRect(0,0,VW,VH);
+
+    // 地面
+    ctx.fillStyle = '#24304a';
+    ctx.fillRect(0, groundY, VW, VH-groundY);
+
+    // 遠景ライン（簡易パララックス）
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    ctx.lineWidth = 2;
+    for(let i=0;i<5;i++){
+      const y = groundY - 40 - i*30;
+      ctx.beginPath();
+      ctx.moveTo((scroll*0.3 + i*120)%VW - VW, y);
+      ctx.lineTo((scroll*0.3 + i*120)%VW + VW, y);
+      ctx.stroke();
+    }
+  }
+
+  // ====== Load images ======
+  function loadImage(src){
+    return new Promise((resolve)=>{
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  const images = { penguinRun:null, bear:null, gotHit:null, homeImage:null };
+
+  // ====== Game State ======
+  let state = 'loading'; // 'home' | 'playing' | 'gameover'
+  let last = 0;          // timestamp
+  let scroll = 0;        // world scroll (for bg/obstacles)
+  let speed = 5;         // world speed
+  let score = 0;         // distance
+
+  // World
+  const groundY = 360;   // ground line (from top)
+
+  // Player (penguin)
+  const player = {
+    x: 160,
+    y: groundY - 90,
+    w: 120,
+    h: 90,
+    vy: 0,
+    onGround: true,
+    jump: function(){
+      if(this.onGround){
+        this.vy = -14;   // 初速
+        this.onGround = false;
+      }
+    },
+    update(){
+      this.vy += 0.7; // gravity
+      this.y += this.vy;
+      if(this.y + this.h >= groundY){
+        this.y = groundY - this.h;
+        this.vy = 0; this.onGround = true;
+      }
+    },
+    draw(){
+      const img = images.penguinRun;
+      if(img){
+        // 走っている雰囲気：上下に少し揺らす
+        const bob = Math.sin(perf*0.02) * 2;
+        ctx.drawImage(img, 0,0,img.width,img.height, this.x, this.y + bob, this.w, this.h);
+      }else{
+        ctx.fillStyle = '#a6f0c5';
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+      }
+    }
+  };
+
+  // Enemy (bear) – 背後で追いかける演出
+  const bear = {
+    x: 40,
+    y: groundY - 120,
+    w: 180,
+    h: 120,
+    draw(){
+      const img = images.bear;
+      if(img){ ctx.drawImage(img, 0,0,img.width,img.height, this.x, this.y, this.w, this.h); }
+      else{ ctx.fillStyle = '#333'; ctx.fillRect(this.x, this.y, this.w, this.h); }
+    }
+  };
+
+  // Obstacles
+  const obstacles = [];
+  function spawnObstacle(){
+    const width = 40 + Math.random()*40;
+    const height = 30 + Math.random()*80;
+    obstacles.push({ x: VW + 20, y: groundY - height, w: width, h: height });
+  }
+
+  function updateObstacles(){
+    for(const o of obstacles){ o.x -= speed; }
+    while(obstacles.length && obstacles[0].x + obstacles[0].w < -20){ obstacles.shift(); }
+    // スポーン間隔
+    if((perf|0) % 90 === 0){ spawnObstacle(); }
+  }
+
+  function drawObstacles(){
+    for(const o of obstacles){
+      // 簡単なブロック
+      ctx.fillStyle = '#8b9bb8';
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.fillStyle = 'rgba(255,255,255,.08)';
+      ctx.fillRect(o.x+4, o.y+4, o.w-8, o.h-8);
+    }
+  }
+
+  function intersects(a,b){
+    return !(a.x+a.w < b.x || a.x > b.x+b.w || a.y+a.h < b.y || a.y > b.y+b.h);
+  }
+
+  // ====== Input ======
+  function doJump(){ if(state==='home'){ startGame(); } else if(state==='playing'){ player.jump(); } else if(state==='gameover'){ goHome(); } }
+  window.addEventListener('touchstart', (e)=>{ e.preventDefault(); doJump(); }, {passive:false});
+  window.addEventListener('mousedown', (e)=>{ doJump(); });
+  window.addEventListener('keydown', (e)=>{ if(e.code==='Space' || e.code==='ArrowUp'){ e.preventDefault(); doJump(); }});
+
+  // ====== Screens ======
+  function drawTitle(){
+    // ホーム画像
+    if(images.homeImage){
+      const iw = 420, ih = 240;
+      ctx.drawImage(images.homeImage, VW/2 - iw/2, 90, iw, ih);
+    }
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.font = '700 56px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillText('わいちゃんRUN', VW/2, 60);
+
+    // Start button (on-canvas)
+    const bw = 280, bh = 64;
+    const bx = VW/2 - bw/2, by = VH - 140;
+    ctx.fillStyle = '#1f2a44';
+    roundRect(ctx, bx,by,bw,bh, 14); ctx.fill();
+    ctx.fillStyle = varToColor('--accent', '#8dd3ff');
+    ctx.font = '700 28px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillText('START', VW/2, by+44);
+
+    hotzones.start = {x:bx,y:by,w:bw,h:bh};
+
+    // 説明
+    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.font = '16px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillText('タップ/スペースでジャンプ', VW/2, VH-24);
+  }
+
+  function varToColor(cssVar, fallback){
+    const temp = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim();
+    return temp || fallback;
+  }
+
+  function drawHUD(){
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.font = '700 22px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillText(`SCORE ${score.toFixed(0)}`, 16, 34);
+  }
+
+  function drawGameOver(){
+    const overlay = 'rgba(0,0,0,.55)';
+    ctx.fillStyle = overlay; ctx.fillRect(0,0,VW,VH);
+
+    if(images.gotHit){
+      const iw = 480, ih = 270; // 表示サイズ
+      ctx.drawImage(images.gotHit, VW/2 - iw/2, 80, iw, ih);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 60px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillText('GAME OVER', VW/2, 64);
+
+    ctx.font = '700 28px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillStyle = varToColor('--accent', '#8dd3ff');
+    ctx.fillText('タップでホームへ', VW/2, VH-42);
+
+    ctx.fillStyle = 'rgba(255,255,255,.8)';
+    ctx.font = '20px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillText(`SCORE ${score.toFixed(0)}`, VW/2, VH-80);
+  }
+
+  function roundRect(ctx,x,y,w,h,r){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+  }
+
+  // クリック用ホットゾーン
+  const hotzones = { start:null };
+  canvas.addEventListener('click', (e)=>{
+    if(state !== 'home') return;
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (VW / rect.width);
+    const py = (e.clientY - rect.top)  * (VH / rect.height);
+    const hz = hotzones.start;
+    if(hz && px>=hz.x && px<=hz.x+hz.w && py>=hz.y && py<=hz.y+hz.h){ startGame(); }
+  });
+
+  // ====== Flow ======
+  let perf = 0;
+
+  function startGame(){
+    state = 'playing';
+    scroll = 0; speed = 6; score = 0; perf = 0;
+    player.x = 160; player.y = groundY - player.h; player.vy = 0; player.onGround = true;
+    bear.x = 40; bear.y = groundY - bear.h;
+    obstacles.length = 0;
+  }
+
+  function goHome(){ state = 'home'; }
+
+  function toGameOver(){ state = 'gameover'; }
+
+  function tick(ts){
+    const dt = ts - last; last = ts; perf += dt || 16.7;
+
+    // Canvas size keeps fixed logical resolution; CSS scales it to screen
+    clear();
+
+    if(state === 'loading'){
+      drawBG();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,.8)';
+      ctx.font = '20px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+      ctx.fillText('読み込み中…', VW/2, VH/2);
+    }
+    else if(state === 'home'){
+      drawBG();
+      drawTitle();
+    }
+    else if(state === 'playing'){
+      scroll += speed;
+      score += speed * 0.4;
+      speed = Math.min(14, speed + 0.0009); // じわっと加速
+
+      drawBG();
+      updateObstacles();
+      drawObstacles();
+
+      player.update();
+      player.draw();
+      bear.draw();
+
+      // 当たり判定
+      for(const o of obstacles){
+        if(intersects(player, o)){
+          toGameOver();
+          break;
+        }
+      }
+      drawHUD();
+    }
+    else if(state === 'gameover'){
+      drawBG();
+      // 障害物とキャラを残してスクショ風
+      drawObstacles();
+      player.draw();
+      bear.draw();
+      drawGameOver();
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // ====== Boot ======
+  Promise.all([
+    loadImage(ASSETS.penguinRun).then(img=>images.penguinRun=img),
+    loadImage(ASSETS.bear).then(img=>images.bear=img),
+    loadImage(ASSETS.gotHit).then(img=>images.gotHit=img),
+    loadImage(ASSETS.homeImage).then(img=>images.homeImage=img)
+  ]).then(()=>{ state='home'; requestAnimationFrame(tick); });
+
+})();
+</script>
+</body>
+</html>
