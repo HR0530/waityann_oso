@@ -1,27 +1,41 @@
 :root{
-  --bg-top:#0f2e0f; --bg-btm:#071a07;   /* 背景(空) */
-  --fg:#e6f5e6; --accent:#6aff6a;
-  --ground:#164d16; --ground-top:#1f6d1f; /* 地面の明るい縁 */
-  --hud:rgba(0,0,0,.5);
+  --bg:#0d0f13; --fg:#e7ecf3; --accent:#8dd3ff; --danger:#ff6b6b; --tile:#121620;
 }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);
+  font-family:system-ui, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans JP", sans-serif;}
 
-*{ box-sizing:border-box; }
-html,body{
-  height:100%;
-  margin:0;
-  background:linear-gradient(180deg,var(--bg-top),var(--bg-btm));
-  color:var(--fg);
-  font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;
+.app-header, .app-footer{
+  display:flex;align-items:center;justify-content:space-between;gap:.75rem;
+  padding:.75rem 1rem;border-bottom:1px solid #1b2231;background:#0e121a;position:sticky;top:0;z-index:10;
 }
+.app-footer{border-top:1px solid #1b2231;border-bottom:none;position:static;justify-content:center;color:#98a2b3}
 
-#game{
-  width:100vw;
-  height:100dvh;               /* スマホにぴったり */
-  display:block;
-  touch-action:manipulation;   /* タップ＝ジャンプ */
-  outline:none;
-  padding-top:env(safe-area-inset-top);
-  padding-right:env(safe-area-inset-right);
-  padding-bottom:env(safe-area-inset-bottom);
-  padding-left:env(safe-area-inset-left);
+.hud button{
+  appearance:none;border:none;background:#1c2433;color:#dfe7f3;
+  padding:.4rem .6rem;border-radius:.75rem;font-size:18px;cursor:pointer;
+}
+.hud button:active{transform:translateY(1px)}
+
+.wrap{max-width:480px;margin:0 auto;padding:1rem;display:flex;flex-direction:column;align-items:center;gap:.75rem}
+#game{width:100%;height:auto;background:linear-gradient(#6ec3ff,#b9e6ff 40%, #9fd7ff 60%, #5bb1ff)}
+.overlay{
+  position:absolute;inset:64px 0 48px 0; /* ヘッダ・フッタぶん */
+  display:flex;align-items:center;justify-content:center;pointer-events:none;
+}
+.panel{display:none;align-items:center;justify-content:center;flex-direction:column;gap:.75rem;text-align:center;background:rgba(0,0,0,.25);padding:1rem 1.2rem;border-radius:1rem;backdrop-filter:blur(6px);pointer-events:auto}
+.panel.active{display:flex}
+.title{margin:.2rem 0 .2rem;font-size:1.6rem;color:var(--accent)}
+.home-img{width:min(80%,360px);height:auto;border-radius:1rem;box-shadow:0 8px 24px rgba(0,0,0,.35);background:#000}
+.hint{margin:0;color:#d0d7e2}
+
+.top-hud{position:absolute;right:1rem;top:64px;display:flex;gap:.5rem;z-index:5}
+.badge{
+  background:rgba(0,0,0,.35);padding:.35rem .6rem;border-radius:.6rem;font-weight:700;
+  box-shadow:0 2px 8px rgba(0,0,0,.25)
+}
+.hearts{letter-spacing:.1rem}
+
+@media (hover:none){
+  .hud button{font-size:20px;padding:.55rem .8rem}
 }
