@@ -1,21 +1,9 @@
 :root{
-  /* 緑調・見やすいHUD */
   --bg-top:#0f2e0f; --bg-btm:#071a07;
-  --fg:#e6f5e6; --accent:#6aff6a;
-  --ground:#164d16; --hud:rgba(0,0,0,.45);
+  --fg:#e6f5e6; --accent:#6aff6a; --ground:#164d16; --hud:rgba(0,0,0,.45);
 }
-*{ box-sizing:border-box; }
-html,body{
-  height:100%;
-  margin:0;
-  background:linear-gradient(180deg,var(--bg-top),var(--bg-btm));
-  color:var(--fg);
-  font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;
-}
-#game{
-  width:100vw;
-  height:100dvh;      /* スマホの表示領域にぴったり */
-  display:block;
-  touch-action:manipulation;
-  outline:none;
-}
+
+/* 端末にぴったり（iOSのアドレスバーで切れないようにsafe-area分だけ下げる） */
+html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg-top),var(--bg-btm));color:var(--fg);
+  font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;}
+#game{width:100vw;height:100dvh;display:block;touch-action:manipulation;outline:none;padding-top:env(safe-area-inset-top);}
