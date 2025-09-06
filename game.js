@@ -1,34 +1,40 @@
+// game.js  — 完成版（Canvas用にCSS変数を解決 / 難易度や当たり判定・穴/足場の非重なり / ガイド線対応）
 (function () {
   'use strict';
 
   // =======================
-  // 調整（必要ならここだけ）
+  // 調整（ここだけ触ればOK）
   // =======================
   const CONFIG = {
     gravity: 0.68,
     jumpPower: 16,
-    doubleJump: true,
+    doubleJump: true,            // 2段ジャンプ
 
+    // 速度（簡単め）
     speedStart: 5,
     speedMax: 12.5,
     speedAccel: 0.0008,
 
-    // 出現間隔(ミリ秒) + 揺らぎ
+    // 出現間隔(ミリ秒) と揺らぎ（0〜1） ※値↑で簡単
     spawnMs: { obstacle: 1500, hole: 2600, coin: 1000, enemy: 3200 },
     spawnJitter: 0.35,
 
+    // ヒット関係
     livesStart: 3,
     enemyDamage: 1,
-    iFrames: 900,
-    enemyHitboxShrink: 0.35,
+    iFrames: 900,               // 無敵時間(ms)
+    enemyHitboxShrink: 0.35,    // 熊の当たり判定を内側に縮小（ゆるく）
 
+    // 見た目/UI
     playerScaleVW: 0.18,
     hudWidth: 230,
-    titleYOffset: 110,
-    autoReturnMs: 2000,
+    titleYOffset: 110,          // ホームのタイトルを下げる量(px)
 
-    // ガイド線
-    edgeThickness: 3,    // 地面・足場上端の線の太さ(px)
+    // ガイド線（地面と足場の上端に1本）
+    edgeThickness: 3,
+
+    // ゲームオーバー
+    autoReturnMs: 2000          // 自動でホームに戻る(ms)
   };
 
   // =======================
@@ -44,6 +50,18 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
+  // ★ Canvas用にCSS変数をJS側で解決
+  const CSS = getComputedStyle(document.documentElement);
+  const COLOR = {
+    hud:    (CSS.getPropertyValue('--hud')    || 'rgba(0,0,0,.5)').trim(),
+    fg:     (CSS.getPropertyValue('--fg')     || '#e6f5e6').trim(),
+    ground: (CSS.getPropertyValue('--ground') || '#164d16').trim(),
+    edge:   (CSS.getPropertyValue('--edge')   || '#caff8a').trim()
+  };
+
+  // =======================
+  // 画面サイズ/HiDPI
+  // =======================
   function resize(){
     const dpr = Math.max(1, Math.min(window.devicePixelRatio||1, 3));
     canvas.width  = Math.floor(window.innerWidth  * dpr);
@@ -59,13 +77,17 @@
   const safeRight = () => parseInt(getComputedStyle(canvas).paddingRight||'0',10) || 0;
   const GY        = () => window.innerHeight - 90; // 地面ライン
 
-  // 画像
+  // =======================
+  // 画像ロード
+  // =======================
   const images = {};
   function load(src){ return new Promise(r=>{ const i=new Image(); i.onload=()=>r(i); i.onerror=()=>r(null); i.src=src; }); }
   Promise.all(Object.entries(ASSETS).map(async ([k,v]) => (images[k] = await load(v))))
     .then(()=>{ toHome(); requestAnimationFrame(loop); });
 
-  // 音
+  // =======================
+  // 音（mp3 + WebAudio簡易SE）
+  // =======================
   const homeBGM = document.getElementById('homeBGM');
   const overSE  = document.getElementById('overSE');
   const stepSE  = document.getElementById('stepSE');
@@ -80,12 +102,17 @@
   }
   function play(a){ try{ a.currentTime=0; a.play().catch(()=>{});}catch{} }
 
+  // =======================
   // 状態
+  // =======================
   let state='loading'; // home / playing / gameover
   let lastTs=0;
   let speed=CONFIG.speedStart, score=0, distance=0, coinsGot=0;
   let lives=CONFIG.livesStart;
-  let invincibleUntil=0, flashTimer=0, lastStepAt=0, autoReturnAt=0;
+  let invincibleUntil=0;      // 無敵解除の時刻(ms)
+  let flashTimer=0;
+  let lastStepAt=0;
+  let autoReturnAt=0;         // GO→ホーム自動復帰時刻
 
   // スポーンタイマー(ms)
   const spawnTimers = { obstacle: 0, hole: 0, coin: 0, enemy: 0 };
@@ -96,7 +123,9 @@
   }
   function resetAllSpawn(){ Object.keys(spawnTimers).forEach(resetSpawnTimer); }
 
+  // =======================
   // プレイヤー
+  // =======================
   const player = {
     w:110,h:85,x:0,y:0,vy:0,onGround:true,jumps:2,prevY:0,
     reset(){
@@ -131,6 +160,7 @@
         if(this.y + this.h >= window.innerHeight) gameOver();
       }
 
+      // 足音
       if(this.onGround){
         const now = performance.now();
         if(stepSE && now - lastStepAt > 190){ play(stepSE); lastStepAt = now; }
@@ -143,7 +173,9 @@
     }
   };
 
-  // エンティティ
+  // =======================
+  // エンティティ（足場/穴/コイン/敵）
+  // =======================
   const obstacles=[]; // {x,y,w,h}
   const holes=[];     // {x,w}
   const coins=[];     // {x,y,r}
@@ -159,7 +191,7 @@
     obstacles.push({x, y: GY()-h, w, h});
   }
   function spawnHole(){
-    const w=90+Math.random()*120;       // 少し狭め
+    const w=90+Math.random()*120;       // 穴幅は少し狭め
     const x = window.innerWidth + 100;
     // 足場と重なるなら生成しない
     if(obstacles.some(O => rangesOverlap(x, x+w, O.x, O.x+O.w))) return;
@@ -177,6 +209,7 @@
   function updateWorld(dt){
     speed = Math.min(CONFIG.speedMax, speed + CONFIG.speedAccel*dt);
 
+    // タイマー式スポーン（FPS非依存）
     for(const k of Object.keys(spawnTimers)){
       spawnTimers[k] -= dt;
       if(spawnTimers[k] <= 0){
@@ -204,7 +237,7 @@
   function hit(a,b){ return !(a.x+a.w<b.x || a.x>b.x+b.w || a.y+a.h<b.y || a.y>b.y+b.h); }
   function shrinkBox(box, ratio){ const mx=box.w*ratio, my=box.h*ratio; return {x:box.x+mx,y:box.y+my,w:box.w-2*mx,h:box.h-2*my}; }
 
-  // 足場（上からだけ着地）
+  // 足場：上からだけ着地
   function handlePlatforms(){
     for(const o of obstacles){
       const wasAbove = player.prevY + player.h <= o.y + 1;
@@ -216,6 +249,7 @@
     }
   }
 
+  // コイン取得
   function collectCoins(){
     for(let i=coins.length-1;i>=0;i--){
       const c=coins[i];
@@ -229,6 +263,7 @@
     }
   }
 
+  // 敵ヒット（緩い判定）
   function collideEnemies(now){
     if(now < invincibleUntil) return;
     const p = shrinkBox({x:player.x,y:player.y,w:player.w,h:player.h}, 0.10);
@@ -245,7 +280,9 @@
     }
   }
 
+  // =======================
   // 入力
+  // =======================
   function press(){
     ensureAC();
     if(state==='home') startGame();
@@ -256,22 +293,23 @@
   window.addEventListener('mousedown', press);
   window.addEventListener('keydown', e=>{ if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); press(); } });
 
-  // 背景 + 地面（ガイド線はここで）
+  // =======================
+  // 描画
+  // =======================
   function drawBG(){
     const g=ctx.createLinearGradient(0,0,0,window.innerHeight);
     g.addColorStop(0,'#0f2e0f'); g.addColorStop(1,'#071a07');
     ctx.fillStyle=g; ctx.fillRect(0,0,window.innerWidth,window.innerHeight);
 
     // 地面本体
-    ctx.fillStyle='var(--ground)';
+    ctx.fillStyle = COLOR.ground;
     ctx.fillRect(0, GY(), window.innerWidth, window.innerHeight-GY());
 
-    // ★ガイド線（地面の上端に一本）
-    ctx.fillStyle='var(--edge)';
+    // ガイド線（地面の上端に一本）※穴はこのあと上書きされる
+    ctx.fillStyle = COLOR.edge;
     ctx.fillRect(0, GY()-CONFIG.edgeThickness, window.innerWidth, CONFIG.edgeThickness);
   }
 
-  // HUD
   function roundRect(x,y,w,h,r,fill){
     ctx.beginPath();
     ctx.moveTo(x+r,y);
@@ -281,11 +319,13 @@
     ctx.arcTo(x,y,x+w,y,r);
     ctx.closePath(); ctx.fillStyle=fill; ctx.fill();
   }
+
   function drawHUD(){
     const x = window.innerWidth - CONFIG.hudWidth - 12 - safeRight();
     const y = 8 + safeTop();
-    roundRect(x,y,CONFIG.hudWidth,58,10,'var(--hud)');
-    ctx.fillStyle='var(--fg)'; ctx.font='700 18px monospace';
+    roundRect(x,y,CONFIG.hudWidth,58,10,COLOR.hud);
+    ctx.fillStyle = COLOR.fg;
+    ctx.font='700 18px monospace';
     ctx.fillText(`SCORE ${score|0}`, x+12, y+28);
     ctx.fillText(`LIFE  ${lives}`,  x+12, y+50);
     ctx.textAlign='right';
@@ -294,23 +334,20 @@
     ctx.textAlign='left';
   }
 
-  // 穴（ストライプ無し、黒だけ）
+  // 穴（黒のみ。ガイド線は上から隠される）
   function drawHoles(){
     ctx.fillStyle='#000';
     for(const h of holes){
       ctx.fillRect(h.x, GY(), h.w, window.innerHeight-GY());
-      // ※ガイド線は drawBG で先に描画 → ここで穴の黒が上書きし、線は穴に重ならない
     }
   }
 
   // 足場（上面にガイド線1本）
   function drawObstacles(){
     for(const o of obstacles){
-      // 本体
-      ctx.fillStyle='#228b22';
-      ctx.fillRect(o.x,o.y,o.w,o.h);
-      // 上面の一本線（背景と溶けない）
-      ctx.fillStyle='var(--edge)';
+      ctx.fillStyle='#228b22'; ctx.fillRect(o.x,o.y,o.w,o.h);
+      ctx.fillStyle='rgba(255,255,255,.08)'; ctx.fillRect(o.x+4,o.y+4,o.w-8,o.h-8);
+      ctx.fillStyle = COLOR.edge;
       ctx.fillRect(o.x, o.y-1, o.w, Math.max(1, CONFIG.edgeThickness-1));
     }
   }
@@ -361,7 +398,9 @@
     ctx.fillText('タップでホームへ', window.innerWidth/2, window.innerHeight-44);
   }
 
+  // =======================
   // フロー
+  // =======================
   function toHome(){
     state='home';
     try{ overSE.pause(); overSE.currentTime=0; }catch{}
@@ -379,12 +418,16 @@
   function gameOver(){
     state='gameover';
     play(overSE);
-    autoReturnAt = performance.now() + CONFIG.autoReturnMs;
+    autoReturnAt = performance.now() + CONFIG.autoReturnMs; // 自動でホームへ戻す
   }
 
-  // ループ
+  // =======================
+  // メインループ
+  // =======================
   function loop(ts){
-    const dt = Math.max(0, ts - lastTs || 16.7); lastTs = ts;
+    let dt = ts - lastTs;
+    if (!lastTs) dt = 16.7;     // 初回フレーム
+    lastTs = ts;
 
     drawBG();
 
@@ -403,7 +446,7 @@
       collectCoins();
       collideEnemies(performance.now());
 
-      // 穴はガイド線より上に描いて線を隠す → 「穴と線が重ならない」
+      // 穴はガイド線より上に描いて線を隠す
       drawHoles();
       drawObstacles();
       drawCoins();
@@ -423,7 +466,9 @@
     requestAnimationFrame(loop);
   }
 
+  // =======================
   // 入力
+  // =======================
   function press(){
     ensureAC();
     if(state==='home') startGame();
