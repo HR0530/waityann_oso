@@ -1,7 +1,8 @@
 :root{
   --bg-top:#0f2e0f; --bg-btm:#071a07;   /* 背景(空) */
   --fg:#e6f5e6; --accent:#6aff6a;
-  --ground:#164d16; --ground-top:#1f6d1f; /* 地面の明るい縁 */
+  --ground:#164d16;                     /* 地面色 */
+  --edge:#caff8a;                       /* ガイド線（地面 & 足場の上端） */
   --hud:rgba(0,0,0,.5);
 }
 
