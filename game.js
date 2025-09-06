@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  // 画像ファイル
+  // ===== Assets =====
   const ASSETS = {
     penguinRun: './走り.PNG',
     bear: './追いかける.PNG',
@@ -13,10 +13,10 @@
   const ctx = canvas.getContext('2d');
   const runSE = document.getElementById('runSE');
 
-  // サイズ調整
+  // ===== Resize & HiDPI =====
   function resize() {
     const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
-    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.width  = Math.floor(window.innerWidth  * dpr);
     canvas.height = Math.floor(window.innerHeight * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = true;
@@ -25,6 +25,7 @@
   window.addEventListener('resize', resize);
   resize();
 
+  // ===== Load images =====
   const images = {};
   function loadImage(src) {
     return new Promise((resolve) => {
@@ -37,29 +38,47 @@
   Promise.all(Object.entries(ASSETS).map(async ([k, v]) => (images[k] = await loadImage(v))))
     .then(() => { state = 'home'; requestAnimationFrame(tick); });
 
-  let state = 'loading';
-  let perf = 0, last = 0;
-  let speed = 6;
-  let score = 0;
-  let lives = 3;
+  // ===== Game state =====
+  let state = 'loading'; // home / playing / gameover
+  let last = 0, perf = 0;
+  let speed = 6, score = 0, lives = 3;
+  let invincible = 0;    // スタート直後の無敵タイム（フレーム数）
 
   function groundY() { return window.innerHeight - 90; }
 
-  // プレイヤー（ペンギン）
+  // ===== Helpers =====
+  function hit(a, b) {
+    return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h);
+  }
+  function centerDraw(img, maxW) {
+    // ホーム/ゲームオーバー用：中央に綺麗に表示
+    if (!img) return;
+    const iw = Math.min(maxW, window.innerWidth * 0.86);
+    const ratio = img.height / img.width;
+    const w = iw;
+    const h = w * ratio;
+    const x = (window.innerWidth  - w) / 2;
+    const y = (window.innerHeight - h) / 2;
+    ctx.drawImage(img, x, y, w, h);
+  }
+
+  // ===== Player (Penguin) =====
   const player = {
-    w: 100, h: 80,
-    x: 150, y: 0, vy: 0,
+    w: 110, h: 85,
+    x: 180, y: 0, vy: 0,
     onGround: true,
     stunned: false, stunTimer: 0,
     reset() {
-      this.x = 150;
+      this.w = Math.min(160, Math.max(90, Math.floor(window.innerWidth * 0.17)));
+      this.h = Math.floor(this.w * 0.77);
+      this.x = Math.floor(window.innerWidth * 0.28);
       this.y = groundY() - this.h;
       this.vy = 0; this.onGround = true;
       this.stunned = false; this.stunTimer = 0;
     },
     jump() {
       if (this.onGround && !this.stunned) {
-        this.vy = -15;
+        this.vy = -Math.max(13, Math.min(18, window.innerHeight * 0.03));
         this.onGround = false;
       }
     },
@@ -67,14 +86,15 @@
       if (this.stunned) {
         this.stunTimer--;
         if (this.stunTimer <= 0) this.stunned = false;
-        return;
+      } else {
+        this.vy += Math.max(0.6, window.innerHeight * 0.00015);
+        this.y += this.vy;
       }
-      this.vy += 0.7;
-      this.y += this.vy;
+      // 地面との接地（後で穴と足場を考慮して最終決定）
       const gy = groundY();
       if (this.y + this.h >= gy) {
         if (!this.onGround) {
-          // 地面に着地したら効果音
+          // 着地SE（「たたたー」）
           runSE.currentTime = 0;
           runSE.play().catch(()=>{});
         }
@@ -88,13 +108,13 @@
       if (img) {
         ctx.save();
         ctx.scale(-1, 1); // 右向きに反転
-        ctx.drawImage(img, 0, 0, img.width, img.height, -this.x - this.w, this.y + bob, this.w, this.h);
+        ctx.drawImage(img, -this.x - this.w, this.y + bob, this.w, this.h);
         ctx.restore();
       } else {
         ctx.fillStyle = '#6aff6a';
         ctx.fillRect(this.x, this.y, this.w, this.h);
       }
-      // 土煙
+      // 土煙（足元エフェクト）
       if (this.onGround && !this.stunned && perf % 8 < 4) {
         ctx.fillStyle = 'rgba(200,255,200,.5)';
         ctx.beginPath();
@@ -104,35 +124,39 @@
     }
   };
 
-  // 熊（反転なし）
+  // ===== Bear (Chaser) =====
   const bear = {
-    w: 160, h: 110,
-    x: 40, y: 0,
+    w: 170, h: 115,
+    x: 30, y: 0,
     reset() {
-      this.x = 40;
+      this.w = Math.min(240, Math.max(120, Math.floor(window.innerWidth * 0.26)));
+      this.h = Math.floor(this.w * 0.68);
+      this.x = Math.max(10, Math.floor(player.x - this.w - 140)); // 十分後ろから
       this.y = groundY() - this.h;
     },
     update() {
-      const targetX = player.x - this.w - 60;
-      this.x += (targetX - this.x) * 0.05;
+      // 目標位置：プレイヤーの少し後ろ
+      const targetGap = player.stunned ? 30 : Math.max(90, player.w * 0.9);
+      const targetX = player.x - targetGap - this.w;
+      this.x += (targetX - this.x) * 0.06;
       this.y = groundY() - this.h;
     },
     draw() {
       const img = images.bear;
-      if (img) ctx.drawImage(img, this.x, this.y, this.w, this.h);
-      else { ctx.fillStyle = '#333'; ctx.fillRect(this.x, this.y, this.w, this.h); }
+      if (img) ctx.drawImage(img, this.x, this.y, this.w, this.h); // 反転しない
+      else { ctx.fillStyle = '#2c3'; ctx.fillRect(this.x, this.y, this.w, this.h); }
     }
   };
 
-  // 障害物
+  // ===== Obstacles (足場にもなる) =====
   const obstacles = [];
   function spawnObstacle() {
     const w = 40 + Math.random() * 50;
-    const h = 30 + Math.random() * 80;
+    const h = 30 + Math.random() * 90;
     obstacles.push({ x: window.innerWidth + 20, y: groundY() - h, w, h });
   }
   function updateObstacles() {
-    for (const o of obstacles) o.x -= speed;
+    for (const o of obstacles) { o.x -= speed; o.y = groundY() - o.h; }
     while (obstacles.length && obstacles[0].x + obstacles[0].w < -40) obstacles.shift();
     if ((perf | 0) % 90 === 0) spawnObstacle();
   }
@@ -145,11 +169,11 @@
     }
   }
 
-  // 穴
+  // ===== Holes (落とし穴) =====
   const holes = [];
   function spawnHole() {
-    const w = 100 + Math.random() * 100;
-    holes.push({ x: window.innerWidth + 40, w });
+    const w = 110 + Math.random() * 120;
+    holes.push({ x: window.innerWidth + 60, w });
   }
   function updateHoles() {
     for (const h of holes) h.x -= speed;
@@ -158,15 +182,13 @@
   }
   function drawHoles() {
     ctx.fillStyle = '#000';
-    for (const h of holes) {
-      ctx.fillRect(h.x, groundY(), h.w, window.innerHeight - groundY());
-    }
+    for (const h of holes) ctx.fillRect(h.x, groundY(), h.w, window.innerHeight - groundY());
+  }
+  function isOverHole(pxCenter) {
+    return holes.some(h => pxCenter > h.x && pxCenter < h.x + h.w);
   }
 
-  function hit(a, b) {
-    return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h);
-  }
-
+  // ===== Input =====
   function press() {
     if (state === 'home') startGame();
     else if (state === 'playing') player.jump();
@@ -178,58 +200,66 @@
     if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); press(); }
   });
 
+  // ===== Drawing =====
   function drawBG() {
     const g = ctx.createLinearGradient(0, 0, 0, window.innerHeight);
     g.addColorStop(0, '#0f2e0f');
     g.addColorStop(1, '#061906');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
-
-    ctx.fillStyle = 'var(--ground)';
+    ctx.fillStyle = '#164d16';
     ctx.fillRect(0, groundY(), window.innerWidth, window.innerHeight - groundY());
   }
+
   function drawHUD() {
     ctx.fillStyle = 'var(--hud-bg)';
-    ctx.fillRect(8, 8, 140, 60);
+    ctx.fillRect(8, 8, 158, 62);
     ctx.fillStyle = 'var(--fg)';
-    ctx.font = '18px monospace';
+    ctx.font = '700 18px monospace';
     ctx.fillText(`SCORE ${score | 0}`, 16, 32);
     ctx.fillText(`LIFE  ${lives}`, 16, 56);
-  }
-  function drawTitle() {
-    if (images.homeImage) {
-      const iw = Math.min(420, window.innerWidth * 0.8);
-      const ih = iw * 0.57;
-      ctx.drawImage(images.homeImage, (window.innerWidth - iw) / 2, 100, iw, ih);
+    // 無敵中は点滅表示
+    if (invincible > 0 && (perf % 400) < 200) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#6aff6a';
+      ctx.fillText('READY!', window.innerWidth - 16, 32);
+      ctx.textAlign = 'left';
     }
+  }
+
+  function drawTitle() {
+    centerDraw(images.homeImage, 480);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#6aff6a';
-    ctx.font = '700 48px sans-serif';
-    ctx.fillText('わいちゃんRUN', window.innerWidth / 2, 60);
+    ctx.font = '700 48px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillText('わいちゃんRUN', window.innerWidth / 2, 64);
     ctx.fillStyle = '#fff';
-    ctx.font = '28px sans-serif';
+    ctx.font = '28px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
     ctx.fillText('START', window.innerWidth / 2, window.innerHeight - 120);
   }
+
   function drawGameOver() {
     ctx.fillStyle = 'rgba(0,0,0,.6)';
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
-    if (images.gotHit) {
-      const iw = Math.min(480, window.innerWidth * 0.86);
-      const ih = iw * 0.56;
-      ctx.drawImage(images.gotHit, (window.innerWidth - iw) / 2, 90, iw, ih);
-    }
+    centerDraw(images.gotHit, 520);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
-    ctx.font = '700 56px sans-serif';
-    ctx.fillText('GAME OVER', window.innerWidth / 2, 70);
+    ctx.font = '700 56px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
+    ctx.fillText('GAME OVER', window.innerWidth / 2, 80);
+    ctx.font = '24px system-ui,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif';
     ctx.fillText(`SCORE ${score | 0}`, window.innerWidth / 2, window.innerHeight - 80);
+    ctx.fillText('タップでホームへ', window.innerWidth / 2, window.innerHeight - 40);
   }
 
+  // ===== Flow =====
   function startGame() {
     state = 'playing';
-    score = 0; lives = 3; speed = 6; perf = 0;
-    player.reset(); bear.reset();
-    obstacles.length = 0; holes.length = 0;
+    speed = 6; score = 0; lives = 3; perf = 0;
+    invincible = 60; // 約1秒
+    player.reset();
+    bear.reset();
+    obstacles.length = 0;
+    holes.length = 0;
   }
   function goHome() { state = 'home'; }
   function gameOver() { state = 'gameover'; }
@@ -241,14 +271,18 @@
     if (state === 'home') {
       drawTitle();
     } else if (state === 'playing') {
+      // 難易度の自然な上昇
       speed = Math.min(14, speed + 0.0009);
       score += speed * 0.4;
+
       updateObstacles();
       updateHoles();
-      player.update();
-      bear.update();
 
-      // 障害物判定
+      // プレイヤー更新（基礎）
+      player.update();
+
+      // 足場衝突（上からだけ吸着）
+      let onTop = false;
       for (const o of obstacles) {
         if (hit(player, o)) {
           const fromAbove = player.y + player.h <= o.y + 15 && player.vy >= 0;
@@ -256,29 +290,63 @@
             player.y = o.y - player.h;
             player.vy = 0;
             player.onGround = true;
-          } else if (!player.stunned) {
-            lives--; player.stunned = true; player.stunTimer = 60;
-            if (lives <= 0) gameOver();
+            onTop = true;
+          } else if (invincible <= 0 && !player.stunned) {
+            lives--;
+            player.stunned = true;
+            player.stunTimer = 60; // 1秒ほど動けない
+            invincible = 30;       // 直後の連続ヒット防止
+            if (lives <= 0) { gameOver(); }
           }
         }
       }
-      // 穴に落ちたか
-      if (holes.some(h => player.x + player.w/2 > h.x && player.x + player.w/2 < h.x + h.w)) {
-        if (player.y + player.h >= window.innerHeight) gameOver();
-      }
-      // 熊に捕まった
-      if (hit(player, bear)) gameOver();
 
+      // 穴（落とし穴）判定：中央xが穴上にあるときは地面がない
+      const centerX = player.x + player.w / 2;
+      const overHole = isOverHole(centerX);
+      if (!onTop) {
+        if (!overHole) {
+          // 通常地面に吸着（update内で済むが、浮いてた場合の保険）
+          if (player.y + player.h > groundY()) {
+            player.y = groundY() - player.h;
+            player.vy = 0; player.onGround = true;
+          }
+        } else {
+          // 穴の上：地面なし→底まで落下
+          if (player.y + player.h >= window.innerHeight) {
+            gameOver();
+          } else {
+            player.onGround = false; // 落下継続
+          }
+        }
+      }
+
+      // 熊の追尾
+      bear.update();
+
+      // 無敵カウントダウン
+      if (invincible > 0) invincible--;
+
+      // 熊の当たり判定（無敵は貫通しない）：捕まったら終了
+      if (invincible <= 0) {
+        const bearBox = { x: bear.x, y: bear.y, w: bear.w, h: bear.h };
+        const playerBox = { x: player.x, y: player.y, w: player.w, h: player.h };
+        if (hit(playerBox, bearBox)) gameOver();
+      }
+
+      // 描画
       drawHoles();
       drawObstacles();
       player.draw();
       bear.draw();
       drawHUD();
+
     } else if (state === 'gameover') {
-      drawObstacles(); drawHoles();
+      drawHoles(); drawObstacles();
       player.draw(); bear.draw();
       drawGameOver();
     }
+
     requestAnimationFrame(tick);
   }
 })();
