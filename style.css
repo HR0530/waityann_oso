@@ -5,6 +5,7 @@
   --accent: #6aff6a;
   --ground: #164d16;
   --hud-bg: rgba(0,0,0,.42);
+  --wall: #1f5d1f;
 }
 *{ box-sizing:border-box; }
 html,body{
