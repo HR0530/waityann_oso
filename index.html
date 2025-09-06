@@ -2,18 +2,50 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <title>わいちゃんRUN</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <canvas id="game" aria-label="わいちゃんRUN"></canvas>
+  <div class="app-header">
+    <h1>わいちゃんRUN</h1>
+    <div class="hud">
+      <button id="btnMute" aria-label="ミュート切替">🔊</button>
+      <button id="btnPause" aria-label="一時停止">⏸</button>
+    </div>
+  </div>
 
-  <!-- 音源（同フォルダ） -->
-  <audio id="homeBGM" src="home.mp3" preload="auto" loop></audio>
-  <audio id="overSE"  src="over.mp3"  preload="auto"></audio>
-  <audio id="stepSE"  src="tatata.mp3" preload="auto"></audio>
+  <main class="wrap">
+    <canvas id="game" width="360" height="640" aria-label="ゲーム画面"></canvas>
 
-  <script src="game.js"></script>
+    <!-- オーバーレイUI -->
+    <div id="overlay" class="overlay">
+      <!-- ホーム画面 -->
+      <section id="home" class="panel active">
+        <h2 class="title">わいちゃんRUN</h2>
+        <img class="home-img" src="./assets/ホーム画面.PNG" alt="ホーム画面イメージ" />
+        <p class="hint">タップ / スペース でスタート</p>
+      </section>
+
+      <!-- ゲームオーバー -->
+      <section id="gameover" class="panel">
+        <h2 class="title">ゲームオーバー</h2>
+        <img class="home-img" src="./assets/襲われた.PNG" alt="襲われたイメージ" />
+        <p class="hint">タップ / スペース でホームに戻る</p>
+      </section>
+    </div>
+
+    <!-- 右上スコア/ライフ -->
+    <div class="top-hud">
+      <div id="scoreBox" class="badge">SCORE: <span id="score">0</span></div>
+      <div id="lifeBox" class="badge hearts" aria-label="ライフ">❤️❤️❤️</div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <small>© わいちゃんRUN</small>
+  </footer>
+
+  <script src="./game.js"></script>
 </body>
 </html>
