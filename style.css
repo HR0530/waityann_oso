@@ -1,11 +1,11 @@
 :root{
-  /* 緑テーマ */
+  /* 緑基調 */
   --bg-top:#0f2e0f; --bg-btm:#071a07;
   --fg:#e6f5e6; --accent:#6aff6a;
   --ground:#164d16; --hud:rgba(0,0,0,.45);
 }
 
-/* 端末にぴったり。iOSのアドレスバーで隠れないようにsafe-areaをパディング */
+*{ box-sizing:border-box; }
 html,body{
   height:100%;
   margin:0;
@@ -15,9 +15,9 @@ html,body{
 }
 #game{
   width:100vw;
-  height:100dvh;
+  height:100dvh;             /* スマホにぴったり */
   display:block;
-  touch-action:manipulation;
+  touch-action:manipulation; /* タップ＝ジャンプ */
   outline:none;
-  padding-top:env(safe-area-inset-top);
+  padding-top:env(safe-area-inset-top); /* iOS上部の安全域 */
 }
