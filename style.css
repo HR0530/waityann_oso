@@ -4,7 +4,7 @@
   --fg: #e6f5e6;
   --accent: #6aff6a;
   --ground: #164d16;
-  --hud-bg: rgba(0,0,0,.4);
+  --hud-bg: rgba(0,0,0,.42);
 }
 *{ box-sizing:border-box; }
 html,body{
@@ -16,7 +16,7 @@ html,body{
 }
 #game{
   width:100vw;
-  height:100dvh;
+  height:100dvh;      /* スマホの表示領域にぴったり */
   display:block;
   touch-action:manipulation;
   outline:none;
